@@ -11,9 +11,9 @@ export default function RequireLogin({ children }) {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
-      if (!user || !user.email.endsWith("@hgu.jp")) {
-        router.push("/login");
-      }
+      //if (!user || !user.email.endsWith("@hgu.jp")) {
+        //router.push("/login");
+      //}
       setChecking(false);
     });
     return () => unsub();

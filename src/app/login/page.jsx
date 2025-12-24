@@ -13,11 +13,11 @@ export default function Page() {
 
     const email = result.user.email;
 
-    if (!email.endsWith("@hgu.jp")) {
-      alert("@hgu.jp のメールアドレスのみ利用できます");
-      await signOut(auth);
-      return;
-    }
+   // if (!email.endsWith("@hgu.jp")) {
+     // alert("@hgu.jp のメールアドレスのみ利用できます");
+      //await signOut(auth);
+      //return;
+   // }
 
     router.push("/books");
   };
