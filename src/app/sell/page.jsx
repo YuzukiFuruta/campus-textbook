@@ -6,6 +6,9 @@ import Nav from "../components/Nav";
 import { auth, db } from "../../lib/firebase";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { useEffect, useState } from "react";
+import { storage } from "../../lib/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+
 
 const CONDITION_RATE = {
 A: 70, // %
@@ -38,6 +41,8 @@ const [wear, setWear] = useState("3"); // 使用感・汚れ
 const [damage, setDamage] = useState("1"); // 濡れ・破損
 
 const [note, setNote] = useState("");
+const [file, setFile] = useState(null);
+const [uploading, setUploading] = useState(false);
 
 // A/B/C と定価からおすすめ価格を自動計算
 useEffect(() => {
@@ -51,63 +56,88 @@ const recommended = roundTo100((lp * rate) / 100);
 setPrice(String(recommended));
 }, [listPrice, condition, autoPriceEnabled]);
 
+
 const submit = async () => {
-if (!auth.currentUser) {
-alert("ログインしてください");
-return;
-}
-if (!title.trim()) {
-alert("教科書名を入力してください");
-return;
-}
+  if (!auth.currentUser) {
+    alert("ログインしてください");
+    return;
+  }
+  if (!title.trim()) {
+    alert("教科書名を入力してください");
+    return;
+  }
 
-const lp = toNum(listPrice);
-const p = toNum(price);
+  const lp = toNum(listPrice);
+  const p = toNum(price);
 
-if (lp <= 0) {
-alert("定価を正しく入力してください");
-return;
-}
-if (p <= 0) {
-alert("販売価格を正しく入力してください");
-return;
-}
+  if (lp <= 0) {
+    alert("定価を正しく入力してください");
+    return;
+  }
+  if (p <= 0) {
+    alert("販売価格を正しく入力してください");
+    return;
+  }
 
-await addDoc(collection(db, "books"), {
-title: title.trim(),
+  setUploading(true);
 
-// 価格
-listPrice: lp,
-price: p,
-condition, // A/B/C
+  try {
+    let imageUrl = "";
+    let imagePath = "";
 
-// 詳細状態（1〜5）
-writing: toNum(writing),
-wear: toNum(wear),
-damage: toNum(damage),
+    // ✅ 写真が選ばれてたらアップロード
+    if (file) {
+      imagePath = `books/${auth.currentUser.uid}/${Date.now()}_${file.name}`;
+      const storageRef = ref(storage, imagePath);
+      await uploadBytes(storageRef, file);
+      imageUrl = await getDownloadURL(storageRef);
+    }
 
-note: note.trim(),
+    // ✅ Firestoreに1回だけ保存
+    await addDoc(collection(db, "books"), {
+      title: title.trim(),
 
-// 出品者情報
-sellerUid: auth.currentUser.uid,
-sellerEmail: auth.currentUser.email,
+      listPrice: lp,
+      price: p,
+      condition,
 
-createdAt: serverTimestamp(),
-});
+      writing: toNum(writing),
+      wear: toNum(wear),
+      damage: toNum(damage),
 
-alert("出品しました！");
+      note: note.trim(),
 
-// リセット（好みで）
-setTitle("");
-setListPrice("");
-setCondition("A");
-setAutoPriceEnabled(true);
-setPrice("");
-setWriting("3");
-setWear("3");
-setDamage("1");
-setNote("");
+      sellerUid: auth.currentUser.uid,
+      sellerEmail: auth.currentUser.email,
+
+      imageUrl,
+      imagePath,
+
+      createdAt: serverTimestamp(),
+    });
+
+    alert("出品しました！");
+
+    // ✅ リセット
+    setTitle("");
+    setListPrice("");
+    setCondition("A");
+    setAutoPriceEnabled(true);
+    setPrice("");
+    setWriting("3");
+    setWear("3");
+    setDamage("1");
+    setNote("");
+    setFile(null);
+  } catch (e) {
+    console.error(e);
+    alert(`出品失敗: ${e?.code || ""}\n${e?.message || e}`);
+  } finally {
+    setUploading(false);
+  }
 };
+
+
 
 return (
 <RequireLogin>
@@ -240,10 +270,25 @@ style={{ width: "100%", padding: 8, marginTop: 6, minHeight: 90 }}
 placeholder="例：期末対策の要点メモあり / 角に少し折れあり など"
 />
 </div>
+<div style={{ marginTop: 16 }}>
+  <label>写真（任意・1枚）</label>
+  <input
+    type="file"
+    accept="image/*"
+    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+    style={{ display: "block", marginTop: 6 }}
+  />
+  {file && (
+    <p style={{ marginTop: 6, color: "#666" }}>
+      選択中：{file.name}
+    </p>
+  )}
+</div>
 
-<button onClick={submit} style={{ marginTop: 18 }}>
-出品する
+<button onClick={submit} style={{ marginTop: 18 }} disabled={uploading}>
+  {uploading ? "アップロード中..." : "出品する"}
 </button>
+
 </div>
 </RequireLogin>
 );
